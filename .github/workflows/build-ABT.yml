@@ -21,6 +21,7 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
+  CCACHE_DIR: ${{ github.workspace }}/openwrt/.ccache
 
 permissions:
   actions: write
@@ -78,6 +79,16 @@ jobs:
         # 应用 plugins.conf 插件选择（可选插件按 y/n 启用/禁用，随后 make defconfig 生效）
         [ -e $GITHUB_WORKSPACE/plugins.conf ] && bash $GITHUB_WORKSPACE/apply-plugins.sh $GITHUB_WORKSPACE/plugins.conf
 
+    - name: 缓存依赖与编译缓存
+      uses: actions/cache@v4
+      with:
+        path: |
+          openwrt/dl
+          openwrt/.ccache
+        key: ${{ github.workflow }}-${{ hashFiles('**/diy-part1.sh', '**/plugins.conf', '**/ABT.config') }}
+        restore-keys: |
+          ${{ github.workflow }}-
+
     - name: 下载依赖包
       id: package
       run: |
@@ -92,7 +103,7 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        make -j$(nproc) USE_CCACHE=1 || make -j1 USE_CCACHE=1 || make -j1 V=s USE_CCACHE=1
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
