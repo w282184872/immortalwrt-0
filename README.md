@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 70cc7aa9153719fc662c314ffe010142_96fa9d7ba3f011f1bc17525400826444
+    ReservedCode1: coYwlbVgzqvdTJd+9wdvmoYwZm566TZaWqeagQZUrl/MXWksbyIOPkd8//OhJKKppGYwSEflkPxY1JdF/InAjxRbdsOGfSp0xU4sicMQLNK5anMohfsOhT7GQeLgvDL1gfU0LrpXDePTgbheBF/S85l+u+hWeAjcXVGnV8FIEo7xgze/dhj4PFYG7uE=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 70cc7aa9153719fc662c314ffe010142_96fa9d7ba3f011f1bc17525400826444
+    ReservedCode2: coYwlbVgzqvdTJd+9wdvmoYwZm566TZaWqeagQZUrl/MXWksbyIOPkd8//OhJKKppGYwSEflkPxY1JdF/InAjxRbdsOGfSp0xU4sicMQLNK5anMohfsOhT7GQeLgvDL1gfU0LrpXDePTgbheBF/S85l+u+hWeAjcXVGnV8FIEo7xgze/dhj4PFYG7uE=
+---
+
 # ImmortalWrt MT798x 云编译
 
 基于 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt) 模板，使用 GitHub Actions 自动编译 [hanwckf/immortalwrt-mt798x](https://github.com/hanwckf/immortalwrt-mt798x)（`openwrt-21.02` 分支，内核 5.4）固件。
@@ -29,8 +40,8 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `Mi.config` | 小米 AX3000T 编译配置（含 3 个默认插件） |
-| `ABT.config` | ABT ASR3000 编译配置（含 3 个默认插件） |
+| `Mi.config` | 小米 AX3000T 编译配置（基础项 + 3 个默认插件，其余由 `plugins.conf` 决定） |
+| `ABT.config` | ABT ASR3000 编译配置（基础项 + 3 个默认插件，其余由 `plugins.conf` 决定） |
 | `plugins.conf` | **插件选择文件**：只填 `y` / `n` 即可开关插件，编译自动生效 |
 | `apply-plugins.sh` | 插件选择应用脚本：读取 `plugins.conf` 并写入 `.config` |
 | `diy-part1.sh` | 自定义 feeds 脚本（更新 feeds 前执行） |
@@ -56,13 +67,34 @@ luci-app-sqm=n          # 禁用 SQM
 
 > 提示：`plugins.conf` 同时作用于两个机型。若只想某个机型启用，可把该插件在两份 config 中直接写 `CONFIG_PACKAGE_xxx=y`（config 优先级更高，会与 plugins.conf 合并）。
 
-### 已启用插件（默认 3 个）
+### 安装清单之外的插件（第三方 feed）
+
+清单之外的插件（如 `luci-app-openclash` 的某些变体、iStore 商店类插件、个人维护的 luci 应用等）不在上游源码 feed 中，直接写 `plugins.conf` 会因 `make defconfig` 找不到包而被清除。需要两步：
+
+1. **添加第三方 feed 源**：编辑 `diy-part1.sh`，追加一行，例如：
+
+   ```bash
+   echo 'src-git 自定义名 https://github.com/作者/仓库.git;分支名' >>feeds.conf.default
+   ```
+
+   当前已内置的第三方 feed：`passwall_packages`（passwall 依赖）、`istore`（luci-app-store）、`mosdns`（luci-app-mosdns，openwrt-21.02 分支）、`taskplan`（luci-app-taskplan）。
+
+2. **在 `plugins.conf` 中把该插件行改为 `y`**（或新增一行 `插件名=y`）。
+
+之后 workflow 的 `feeds update -a / install -a` 会自动拉取 feed，插件即可参与编译。
+
+> 注意：第三方 feed 与源码版本可能存在兼容性问题（依赖缺失、luci 版本差异），编译失败时请查看 Actions 日志中的具体报错。
+
+### 已启用插件（默认 6 个）
 
 | 插件 | 说明 |
 | --- | --- |
 | `luci-app-adbyby-plus` | 广告过滤（依赖 adbyby + dnsmasq-full + ipset） |
 | `luci-app-passwall` | 科学上网插件（含 Xray 内核，其余 INCLUDE 均关闭） |
 | `luci-app-ttyd` | 网页终端（浏览器内 SSH 登录路由器） |
+| `luci-app-store` | iStore 应用商店（第三方 feed，刷机后可在商店内在线安装更多插件） |
+| `luci-app-mosdns` | mosdns DNS 分流/加速（第三方 feed，含 mosdns 本体） |
+| `luci-app-taskplan` | 任务设置/定时计划（第三方 feed，重启/关机/定时任务/自定义脚本） |
 
 ### 可选未启用插件（189 个）
 
@@ -285,3 +317,4 @@ luci-app-sqm=n          # 禁用 SQM
 - 以上插件均已在 feed 内，可直接在 `plugins.conf` 选择；个别插件（如 passwall）带有 `INCLUDE_*` 子选项，如需调整请在对应 `.config` 中修改。
 - `diy-part1.sh` 中引用的 `fw876/helloworld`（ssr-plus）feed 已被 GitHub 归档、不再更新；如遇编译失败可移除该行或替换为仍在维护的 feed。
 - 固件下载位置：Actions 运行记录页的 Artifacts，或 Releases 页面（tag 格式 `YYYY.MM.DD-HHMM`）。
+*（内容由AI生成，仅供参考）*
