@@ -1,97 +1,47 @@
-编译固件对小白来说真的很难，本地编译又很容易失败，而且找包总是找不到自己想要的插件。
-所以整合各位大佬的项目做一个保镖级教程！配置好后傻瓜式一键编译，废话不多说，开始！！
-                            
-准备：一个ubuntu 64Bit系统的服务器或者虚拟机
-          还有一个Github账号.
-                          
-1.SSH连接到Ubuntu
-                             
-2.拉取源码
-终端输入 ,其他源码自行git，此处只做示例！
+# ImmortalWrt MT798x 云编译
 
-git clone --depth=1https://github.com/hanwckf/immortalwrt-mt798x.git
+基于 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt) 模板，使用 GitHub Actions 自动编译 [hanwckf/immortalwrt-mt798x](https://github.com/hanwckf/immortalwrt-mt798x)（`openwrt-21.02` 分支，内核 5.4）固件。
 
-终端输入
-cd immortalwrt-mt798x
+## 支持的机型
 
-#MT7981
-cp -f defconfig/mt7981-ax3000.config .config
+| 机型 | 配置文件 | 编译工作流 |
+| --- | --- | --- |
+| 小米 Mi Router AX3000T | `Mi.config` | `build-Mi.yml` |
+| ABT ASR3000 | `ABT.config` | `build-ABT.yml` |
 
-#MT7986
-cp -f defconfig/mt7986-ax6000.config .config
+## 自动编译流程
 
-#MT7986 256M Low Memory
-cp -f defconfig/mt7986-ax6000-256m.config .config
-                  
-4.终端输入
- make menuconfig
-                    
-进入配置文件,开始选择型号，添加插件
-                   
-PS：menuconfig界面下，按两次ESC退到上一级，上下键选中选项按空格确认，M状态为手动（即编译出ipk不安装进固件），*状态为编译进固件
-                  
-进入Target profile，选择你的路由器型号，回车确定
-                 
-向下翻找到Luci，进入选择Applicatinos，回车确定，开始添加插件（上下键选中选项按空格确认，M状态为手动（即编译出ipk不安装进固件），*状态为编译进固件）
+1. `Update Checker` 每 6 小时检查一次上游源码是否有新提交（也可在 Actions 页面手动运行）；
+2. 上游有更新时，自动通过 `repository_dispatch` 触发 `build-Mi.yml` 和 `build-ABT.yml`；
+3. 编译完成后固件自动上传到 **Actions Artifacts** 与 **Releases**（Release 保留最近 3 个版本）。
 
-luci插件对照表
-https://kdocs.cn/l/cquwbh9lli8J
+也可以手动触发：仓库 Actions 页面 → 选择对应工作流 → Run workflow。
 
-选择好插件后，Save保存，然后把.config文件导出到桌面，重命名为1.config
-                
-Gihub操作：                                 
-1.进入P3TERX/Actions-OpenWrt项目页面，点击页面中的Use this template
-                                
-2.填写仓库名称，然后点击Create repository from template（从模版创建储存库）
-                  
-3.找到刚才创建好的项目，点击Addfile-Upload files上传1.config文件
-                      
-4.编辑.github/workflows/openwrt-builder.yml文件
-          
-name: OpenWrt Builder #你的工作流名称（yml文件名称）
+## 首次配置
 
-on:
+1. **（推荐）配置 PAT**：仓库 Settings → Secrets and variables → Actions → New repository secret，新建 `ACTIONS_TRIGGER_PAT`，值为一个勾选了 `repo` 权限的 Personal Access Token。
+   - 不配置也能运行（会自动回退使用默认 token），但配置后 `Update Checker` 自动触发编译更稳定。
+2. 其余无需配置，直接手动 Run 一次 `build-Mi.yml` / `build-ABT.yml` 验证即可。
 
-repository_dispatch:
+## 目录结构
 
-workflow_dispatch:
+| 文件 | 说明 |
+| --- | --- |
+| `Mi.config` | 小米 AX3000T 编译配置 |
+| `ABT.config` | ABT ASR3000 编译配置 |
+| `diy-part1.sh` | 自定义 feeds 脚本（更新 feeds 前执行） |
+| `diy-part2.sh` | 编译前自定义脚本（默认 IP 已改为 192.168.6.1） |
+| `.github/workflows/build-Mi.yml` | 小米 AX3000T 编译工作流 |
+| `.github/workflows/build-ABT.yml` | ABT ASR3000 编译工作流 |
+| `.github/workflows/update-checker.yml` | 上游源码更新检测工作流 |
 
-env:
-REPO_URL: https://github.com/coolsnowwolf/lede #源码仓库地址
+## 自定义
 
-REPO_BRANCH: master #源码分支
+- 修改默认登录 IP：编辑 `diy-part2.sh`
+- 增删插件：编辑对应的 `.config` 后重新触发编译
+- 如需上传完整 bin 目录（全部 ipk）：把工作流中 `UPLOAD_BIN_DIR` 改为 `true`（会显著增大 Artifact）
 
-FEEDS_CONF: feeds.conf.default
+## 注意事项
 
-CONFIG_FILE: .config #你的配置文件名
-
-DIY_P1_SH: diy-part1.sh
-
-DIY_P2_SH: diy-part2.sh
-
-UPLOAD_BIN_DIR: false #上传 bin 目录。即包含所有 ipk 文件和固件的目录。默认false
-
-UPLOAD_FIRMWARE: true #上传固件目录。默认true（建议打开，不然编译好没有固件）
-
-UPLOAD_RELEASE: true #上传固件到 releases 。默认false
-
-TZ: Asia/Shanghai
-                  
-以上是需要修改的部分代码注释，按需求修改即可
-默认登录地址：192.168.50.5，可以去diy-part2.sh文件内修改
-              
-5.运行Actions工作流,  路径：项目目录--Actions--OpenWrt Builder--Run workflow
-            
-6.N小时后去releases下载编译好的固件，教程到此结束！
-               
-
-地址：192.168.3.1  密码：无
-              
-感谢P3TERX/Actions-OpenWrt的云编译项目
-其他进阶使用移步大佬博客P3TERX
-
-
-
-
-
-
+- `diy-part1.sh` 中引用的 `fw876/helloworld`（ssr-plus）feed 已被 GitHub 归档、不再更新；如遇编译失败可移除该行或替换为仍在维护的 feed。
+- 固件下载位置：Actions 运行记录页的 Artifacts，或 Releases 页面（tag 格式 `YYYY.MM.DD-HHMM`）。
