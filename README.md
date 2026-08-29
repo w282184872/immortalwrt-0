@@ -403,7 +403,7 @@ echo 'src-git myapp https://github.com/xxx/luci-app-xxx.git;main' >>feeds.conf.d
 | 默认登录 IP | 工作流 `env.LAN_IP`（或 `diy-part2.sh`） | 两机型各自独立 |
 | 上传完整 bin 目录（全部 ipk） | 工作流 `UPLOAD_BIN_DIR` 改为 `true` | 会显著增大 Artifact |
 | 上游检测频率 | `update-checker.yml` 中 `cron` 表达式 | 默认每 6 小时一次 |
-| Release 保留版本数 | 工作流中相关删除逻辑 | 默认保留最近 3 个版本 |
+| Release 保留版本数 | 工作流中相关删除逻辑 | 默认保留所有版本 |
 | 编译目标机型 | `Mi.config` / `ABT.config` 中的 `CONFIG_TARGET_*` | 一般不用改 |
 
 ## 自动编译流程说明
@@ -420,7 +420,7 @@ repository_dispatch 触发 build-Mi.yml / build-ABT.yml
   → apply-plugins.sh 应用 plugins.conf → make defconfig 补齐依赖）
         │
         ▼
-编译固件 → 上传 Artifacts → 发布 Releases（保留最近 3 个版本）
+编译固件 → 上传 Artifacts → 发布 Releases（保留所有版本）
 ```
 
 也可以手动触发：仓库 `Actions` 页面 → 选择对应工作流 → `Run workflow`（不勾选"enable workflow"可直接用默认参数运行）。
@@ -429,7 +429,7 @@ repository_dispatch 触发 build-Mi.yml / build-ABT.yml
 
 - **下载位置**：
   - Actions 运行记录页 → 底部 `Artifacts`（固件压缩包）；
-  - `Releases` 页面（tag 格式 `YYYY.MM.DD-HHMM`，保留最近 3 个版本）。
+  - `Releases` 页面（tag 格式 `YYYY.MM.DD-HHMM`，保留所有版本）。
 - **固件包内容**：解压后为 `*.bin` 固件文件，小米 AX3000T 请认准 `xiaomi_ax3000t` 前缀，ABT ASR3000 请认准 `abt_asr3000` 前缀。
 - **刷机方式**：进入当前固件后台 → `系统 → 备份/升级 → 刷写新的固件`，选择对应 `*.bin` 文件即可（注意保留配置与否，跨版本建议不保留配置）。
 
