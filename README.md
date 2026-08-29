@@ -2,14 +2,21 @@
 
 基于 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt) 模板，使用 GitHub Actions 自动编译 [hanwckf/immortalwrt-mt798x](https://github.com/hanwckf/immortalwrt-mt798x)（`openwrt-21.02` 分支，内核 5.4）固件，支持小米 AX3000T 与 ABT ASR3000 双机型。
 
-本项目主打**开箱即用**：修改根目录的 `plugins.conf` 即可开关插件，无需手工编辑庞大的 `.config`；上游源码更新后自动触发编译，固件自动发布到 Releases。
+本项目主打**开箱即用**：
+
+- 无线方案统一采用 **mtwifi-cfg**（`kmod-mt_wifi` 驱动 + `mtwifi-cfg` + `luci-app-mtwifi-cfg`），兼容 OpenWrt 原生 LuCI/netifd，WiFi 开箱即用；
+- 修改根目录的 `plugins.conf` 即可开关插件，无需手工编辑庞大的 `.config`；
+- 编译流程内置 **actions/cache + ccache** 缓存（源码依赖包 `dl` 与编译缓存 `.ccache`），二次编译大幅提速；
+- 上游源码更新后自动触发编译，固件自动发布到 Releases，**保留所有版本**。
 
 ---
 
 ## 目录
 
 - [支持的机型与默认配置](#支持的机型与默认配置)
+- [无线方案说明](#无线方案说明)
 - [仓库结构说明](#仓库结构说明)
+- [编译缓存说明](#编译缓存说明)
 - [快速上手（首次使用）](#快速上手首次使用)
 - [插件开关教程（plugins.conf）](#插件开关教程pluginsconf)
 - [第三方 feed 与插件安装](#第三方-feed-与插件安装)
@@ -30,12 +37,26 @@
 
 > 默认 IP 由各工作流中的 `env.LAN_IP` 变量注入，两台机器互不干扰。登录地址为 `http://<默认IP>`。
 
+## 无线方案说明
+
+两个机型均采用 **mtwifi-cfg** 无线方案，核心组件：
+
+| 组件 | 说明 |
+| --- | --- |
+| `kmod-mt_wifi` | MTK 官方闭源 WiFi 驱动（`CONFIG_MTK_MT_WIFI`） |
+| `mtwifi-cfg` | MTK WiFi 配置工具 |
+| `luci-app-mtwifi-cfg` | 无线配置 LuCI 界面（含 `luci-i18n-mtwifi-cfg-zh-cn` 中文包） |
+| 驱动版本 | `CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673`（含 MT7981 默认固件） |
+
+完整方案配置存放在 `defconfig-mtwifi/` 目录（`Mi-ax3000t.config` / `ABT-asr3000.config`），根目录 `Mi.config` / `ABT.config` 即由这两份方案文件生成。该方案兼容 OpenWrt 原生 LuCI/netifd 流程，刷入后 2.4G / 5G WiFi 开箱即用，无需额外配置。
+
 ## 仓库结构说明
 
 | 文件 | 作用 | 日常需要改吗 |
 | --- | --- | --- |
-| `Mi.config` | 小米 AX3000T 的 OpenWrt 编译配置（目标机型 + 内核选项） | 一般不用 |
-| `ABT.config` | ABT ASR3000 的 OpenWrt 编译配置（目标机型 + 内核选项） | 一般不用 |
+| `Mi.config` | 小米 AX3000T 的 OpenWrt 编译配置（目标机型 + mtwifi-cfg 无线方案） | 一般不用 |
+| `ABT.config` | ABT ASR3000 的 OpenWrt 编译配置（目标机型 + mtwifi-cfg 无线方案） | 一般不用 |
+| `defconfig-mtwifi/` | 完整的 mtwifi-cfg 无线方案源文件（`Mi-ax3000t.config` / `ABT-asr3000.config`） | 无线方案备份/对比时看 |
 | `plugins.conf` | **插件总开关**：每行一个插件，`=y` 启用、`=n` 禁用 | **常用，见下节** |
 | `apply-plugins.sh` | 把 `plugins.conf` 的选择写入 `.config` 的脚本 | 不用动 |
 | `diy-part1.sh` | 更新 feeds 前执行的脚本（追加第三方 feed 源） | 加新 feed 时才动 |
@@ -44,13 +65,22 @@
 | `.github/workflows/build-ABT.yml` | ABT ASR3000 编译工作流 | 改 IP / 编译频率时动 |
 | `.github/workflows/update-checker.yml` | 上游源码更新检测，有新提交则触发编译 | 改检测频率时动 |
 
+## 编译缓存说明
+
+两个编译工作流均内置 **actions/cache + ccache** 双重缓存：
+
+- **`dl` 缓存**：`openwrt/dl`（源码依赖包下载目录）按工作流维度缓存，命中后跳过 `make download` 的网络下载；
+- **ccache 缓存**：`openwrt/.ccache` 缓存编译中间产物，编译命令使用 `make -j$(nproc) USE_CCACHE=1`，重复编译同一源码树时可跳过大量重编译步骤。
+
+缓存 key 由 `工作流名 + diy-part1.sh/plugins.conf/机型配置文件` 的哈希组成；配置或插件变更时自动失效并重建缓存，未变更时直接命中，二次编译通常可节省一半以上时间。
+
 ## 快速上手（首次使用）
 
 1. **（推荐）配置 PAT 以启用自动编译**：仓库 `Settings → Secrets and variables → Actions → New repository secret`，新建名为 `ACTIONS_TRIGGER_PAT` 的 secret，值为一个勾选了 `repo` 权限的 Personal Access Token。
    - 不配置也能用（自动回退默认 token），只是自动触发编译的稳定性稍差。
 2. **按需调整插件**：编辑根目录 `plugins.conf`，把想启用的插件行改成 `=y`（详见下节）。
 3. **触发首次编译**：仓库 `Actions` 页面 → 左侧选择 `build-Mi` / `build-ABT` → `Run workflow`。
-4. **等待编译完成**：约 30~60 分钟（视 GitHub 排队情况），页面会显示步骤进度。
+4. **等待编译完成**：约 30~60 分钟（视 GitHub 排队情况与缓存命中情况，二次编译更快），页面会显示步骤进度。
 5. **下载固件**：进入该次运行记录 → `Artifacts` 下载固件压缩包，或到 `Releases` 页面下载（见"固件下载与刷机"）。
 
 ## 插件开关教程（plugins.conf）
@@ -103,7 +133,7 @@ luci-app-sqm=n          # 禁用 SQM
 
 ### 完整插件清单
 
-清单按分类列出，除 6 个默认启用项外，其余 189 个默认为 `n`，需要哪个就把对应行改为 `y`。
+清单按分类列出，除 6 个默认启用项外，其余默认为 `n`，需要哪个就把对应行改为 `y`。
 
 #### 科学上网 / 代理 / VPN
 
@@ -403,7 +433,7 @@ echo 'src-git myapp https://github.com/xxx/luci-app-xxx.git;main' >>feeds.conf.d
 | 默认登录 IP | 工作流 `env.LAN_IP`（或 `diy-part2.sh`） | 两机型各自独立 |
 | 上传完整 bin 目录（全部 ipk） | 工作流 `UPLOAD_BIN_DIR` 改为 `true` | 会显著增大 Artifact |
 | 上游检测频率 | `update-checker.yml` 中 `cron` 表达式 | 默认每 6 小时一次 |
-| Release 保留版本数 | 工作流中相关删除逻辑 | 默认保留所有版本 |
+| Release 保留版本数 | 工作流中相关删除逻辑 | 默认保留所有版本，不自动清理 |
 | 编译目标机型 | `Mi.config` / `ABT.config` 中的 `CONFIG_TARGET_*` | 一般不用改 |
 
 ## 自动编译流程说明
@@ -415,12 +445,13 @@ Update Checker（每 6 小时检查上游源码）
 repository_dispatch 触发 build-Mi.yml / build-ABT.yml
         │
         ▼
-检出源码 → 初始化编译环境 → 克隆源码 → 加载自定义配置
+检出源码 → 初始化编译环境 → 克隆源码 → 恢复缓存（dl / .ccache）
+→ 加载自定义配置
 （diy-part1.sh 追加 feed → feeds update/install → diy-part2.sh 注入 IP
   → apply-plugins.sh 应用 plugins.conf → make defconfig 补齐依赖）
         │
         ▼
-编译固件 → 上传 Artifacts → 发布 Releases（保留所有版本）
+编译固件（USE_CCACHE=1 命中缓存加速）→ 上传 Artifacts → 发布 Releases（保留所有版本）
 ```
 
 也可以手动触发：仓库 `Actions` 页面 → 选择对应工作流 → `Run workflow`（不勾选"enable workflow"可直接用默认参数运行）。
@@ -449,6 +480,12 @@ passwall 的协议内核（xray-core、sing-box、shadowsocks-rust 等）在 `pa
 
 **Q5：`diy-part1.sh` 中的 helloworld feed 报错？**
 `fw876/helloworld`（ssr-plus）feed 已被 GitHub 归档、不再更新，如遇编译失败可移除该行或替换为仍在维护的 feed。
+
+**Q6：编译后的固件没有 WiFi 或无线界面异常？**
+检查 `.config` 是否包含 mtwifi-cfg 方案核心项：`CONFIG_PACKAGE_kmod-mt_wifi=y`、`CONFIG_PACKAGE_mtwifi-cfg=y`、`CONFIG_PACKAGE_luci-app-mtwifi-cfg=y`、`CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y`。若缺失，直接以 `defconfig-mtwifi/` 目录下的方案文件替换根目录 `Mi.config` / `ABT.config` 后重新编译。
+
+**Q7：二次编译还是很慢，缓存没生效？**
+确认工作流中 `actions/cache@v4` 步骤的 key 匹配（首次运行后才有缓存可用）；修改 `plugins.conf`、`diy-part1.sh` 或机型配置文件会导致缓存 key 变化、缓存重建，属正常现象。
 
 ## 注意事项
 
