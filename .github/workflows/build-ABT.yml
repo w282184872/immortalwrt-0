@@ -75,6 +75,8 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
+        # 应用 plugins.conf 插件选择（可选插件按 y/n 启用/禁用，随后 make defconfig 生效）
+        [ -e $GITHUB_WORKSPACE/plugins.conf ] && bash $GITHUB_WORKSPACE/apply-plugins.sh $GITHUB_WORKSPACE/plugins.conf
 
     - name: 下载依赖包
       id: package
