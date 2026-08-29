@@ -11,6 +11,6 @@
 #
 
 # Add a feed source
-# 注意：fw876/helloworld 已被 GitHub 归档、不再更新。
-# 若后续编译失败，可注释掉下面这行，并自行添加其他仍在维护的科学上网 feed。
-echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
+# 仅保留三个插件：luci-app-adbyby-plus / luci-app-ttyd / luci-app-passwall
+# passwall 核心依赖包 feed（Openwrt-Passwall 官方组织维护，提供 xray-core 等）
+echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' >>feeds.conf.default
