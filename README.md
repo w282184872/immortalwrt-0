@@ -1,91 +1,83 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 70cc7aa9153719fc662c314ffe010142_96fa9d7ba3f011f1bc17525400826444
-    ReservedCode1: coYwlbVgzqvdTJd+9wdvmoYwZm566TZaWqeagQZUrl/MXWksbyIOPkd8//OhJKKppGYwSEflkPxY1JdF/InAjxRbdsOGfSp0xU4sicMQLNK5anMohfsOhT7GQeLgvDL1gfU0LrpXDePTgbheBF/S85l+u+hWeAjcXVGnV8FIEo7xgze/dhj4PFYG7uE=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 70cc7aa9153719fc662c314ffe010142_96fa9d7ba3f011f1bc17525400826444
-    ReservedCode2: coYwlbVgzqvdTJd+9wdvmoYwZm566TZaWqeagQZUrl/MXWksbyIOPkd8//OhJKKppGYwSEflkPxY1JdF/InAjxRbdsOGfSp0xU4sicMQLNK5anMohfsOhT7GQeLgvDL1gfU0LrpXDePTgbheBF/S85l+u+hWeAjcXVGnV8FIEo7xgze/dhj4PFYG7uE=
----
-
 # ImmortalWrt MT798x 云编译
 
-基于 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt) 模板，使用 GitHub Actions 自动编译 [hanwckf/immortalwrt-mt798x](https://github.com/hanwckf/immortalwrt-mt798x)（`openwrt-21.02` 分支，内核 5.4）固件。
+基于 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt) 模板，使用 GitHub Actions 自动编译 [hanwckf/immortalwrt-mt798x](https://github.com/hanwckf/immortalwrt-mt798x)（`openwrt-21.02` 分支，内核 5.4）固件，支持小米 AX3000T 与 ABT ASR3000 双机型。
 
-## 支持的机型
+本项目主打**开箱即用**：修改根目录的 `plugins.conf` 即可开关插件，无需手工编辑庞大的 `.config`；上游源码更新后自动触发编译，固件自动发布到 Releases。
 
-| 机型 | 配置文件 | 编译工作流 |
+---
+
+## 目录
+
+- [支持的机型与默认配置](#支持的机型与默认配置)
+- [仓库结构说明](#仓库结构说明)
+- [快速上手（首次使用）](#快速上手首次使用)
+- [插件开关教程（plugins.conf）](#插件开关教程pluginsconf)
+- [第三方 feed 与插件安装](#第三方-feed-与插件安装)
+- [自定义编译配置](#自定义编译配置)
+- [自动编译流程说明](#自动编译流程说明)
+- [固件下载与刷机](#固件下载与刷机)
+- [常见问题（FAQ）](#常见问题faq)
+- [注意事项](#注意事项)
+
+---
+
+## 支持的机型与默认配置
+
+| 机型 | 配置文件 | 编译工作流 | 默认登录 IP | 默认后台密码 |
+| --- | --- | --- | --- | --- |
+| 小米 Mi Router AX3000T | `Mi.config` | `build-Mi.yml` | `192.168.3.1` | 无密码（首次登录自行设置） |
+| ABT ASR3000 | `ABT.config` | `build-ABT.yml` | `192.168.6.1` | 无密码（首次登录自行设置） |
+
+> 默认 IP 由各工作流中的 `env.LAN_IP` 变量注入，两台机器互不干扰。登录地址为 `http://<默认IP>`。
+
+## 仓库结构说明
+
+| 文件 | 作用 | 日常需要改吗 |
 | --- | --- | --- |
-| 小米 Mi Router AX3000T | `Mi.config` | `build-Mi.yml` |
-| ABT ASR3000 | `ABT.config` | `build-ABT.yml` |
+| `Mi.config` | 小米 AX3000T 的 OpenWrt 编译配置（目标机型 + 内核选项） | 一般不用 |
+| `ABT.config` | ABT ASR3000 的 OpenWrt 编译配置（目标机型 + 内核选项） | 一般不用 |
+| `plugins.conf` | **插件总开关**：每行一个插件，`=y` 启用、`=n` 禁用 | **常用，见下节** |
+| `apply-plugins.sh` | 把 `plugins.conf` 的选择写入 `.config` 的脚本 | 不用动 |
+| `diy-part1.sh` | 更新 feeds 前执行的脚本（追加第三方 feed 源） | 加新 feed 时才动 |
+| `diy-part2.sh` | 编译前执行的脚本（默认 IP 注入等） | 一般不用 |
+| `.github/workflows/build-Mi.yml` | 小米 AX3000T 编译工作流 | 改 IP / 编译频率时动 |
+| `.github/workflows/build-ABT.yml` | ABT ASR3000 编译工作流 | 改 IP / 编译频率时动 |
+| `.github/workflows/update-checker.yml` | 上游源码更新检测，有新提交则触发编译 | 改检测频率时动 |
 
-各机型默认登录 IP 由工作流 `env.LAN_IP` 注入（Mi：`192.168.3.1`，ABT：`192.168.6.1`）。
+## 快速上手（首次使用）
 
-## 自动编译流程
+1. **（推荐）配置 PAT 以启用自动编译**：仓库 `Settings → Secrets and variables → Actions → New repository secret`，新建名为 `ACTIONS_TRIGGER_PAT` 的 secret，值为一个勾选了 `repo` 权限的 Personal Access Token。
+   - 不配置也能用（自动回退默认 token），只是自动触发编译的稳定性稍差。
+2. **按需调整插件**：编辑根目录 `plugins.conf`，把想启用的插件行改成 `=y`（详见下节）。
+3. **触发首次编译**：仓库 `Actions` 页面 → 左侧选择 `build-Mi` / `build-ABT` → `Run workflow`。
+4. **等待编译完成**：约 30~60 分钟（视 GitHub 排队情况），页面会显示步骤进度。
+5. **下载固件**：进入该次运行记录 → `Artifacts` 下载固件压缩包，或到 `Releases` 页面下载（见"固件下载与刷机"）。
 
-1. `Update Checker` 每 6 小时检查一次上游源码是否有新提交（也可在 Actions 页面手动运行）；
-2. 上游有更新时，自动通过 `repository_dispatch` 触发 `build-Mi.yml` 和 `build-ABT.yml`；
-3. 编译完成后固件自动上传到 **Actions Artifacts** 与 **Releases**（Release 保留最近 3 个版本）。
+## 插件开关教程（plugins.conf）
 
-也可以手动触发：仓库 Actions 页面 → 选择对应工作流 → Run workflow。
+### 原理
 
-## 首次配置
+`apply-plugins.sh` 会在编译流程的 `make defconfig` 之前读取 `plugins.conf`，把每一行的选择写入 `.config`：
 
-1. **（推荐）配置 PAT**：仓库 Settings → Secrets and variables → Actions → New repository secret，新建 `ACTIONS_TRIGGER_PAT`，值为一个勾选了 `repo` 权限的 Personal Access Token。
-   - 不配置也能运行（会自动回退使用默认 token），但配置后 `Update Checker` 自动触发编译更稳定。
-2. 其余无需配置，直接手动 Run 一次 `build-Mi.yml` / `build-ABT.yml` 验证即可。
+- `包名=y` → 写入 `CONFIG_PACKAGE_包名=y`
+- `包名=n` → 写入 `# CONFIG_PACKAGE_包名 is not set`
 
-## 目录结构
+随后 `make defconfig` 会自动补齐该插件的依赖项。因此**你只需要改 `plugins.conf`，编译结果就会跟着变**，不需要碰 `.config`。
 
-| 文件 | 说明 |
-| --- | --- |
-| `Mi.config` | 小米 AX3000T 编译配置（基础项 + 3 个默认插件，其余由 `plugins.conf` 决定） |
-| `ABT.config` | ABT ASR3000 编译配置（基础项 + 3 个默认插件，其余由 `plugins.conf` 决定） |
-| `plugins.conf` | **插件选择文件**：只填 `y` / `n` 即可开关插件，编译自动生效 |
-| `apply-plugins.sh` | 插件选择应用脚本：读取 `plugins.conf` 并写入 `.config` |
-| `diy-part1.sh` | 自定义 feeds 脚本（更新 feeds 前执行） |
-| `diy-part2.sh` | 编译前自定义脚本（默认 IP 按机型注入） |
-| `.github/workflows/build-Mi.yml` | 小米 AX3000T 编译工作流 |
-| `.github/workflows/build-ABT.yml` | ABT ASR3000 编译工作流 |
-| `.github/workflows/update-checker.yml` | 上游源码更新检测工作流 |
-
-## 自定义
-
-- 修改默认登录 IP：编辑各工作流 `env.LAN_IP` 或 `diy-part2.sh`
-- 增删插件：**编辑 `plugins.conf`** 后重新触发编译即可（详见下节）
-- 如需上传完整 bin 目录（全部 ipk）：把工作流中 `UPLOAD_BIN_DIR` 改为 `true`（会显著增大 Artifact）
-
-## 可选插件（plugins.conf）
-
-编译时无需再改 `.config`，只需在 `plugins.conf` 中把对应插件行改为 `y`（启用）或 `n`（禁用）。workflow 会在编译前自动把选择写入 `.config`，再经 `make defconfig` 补齐依赖。
+### 语法说明
 
 ```
+# 这是注释行，以 # 开头
 luci-app-openclash=y    # 启用 OpenClash
 luci-app-sqm=n          # 禁用 SQM
 ```
 
-> 提示：`plugins.conf` 同时作用于两个机型。若只想某个机型启用，可把该插件在两份 config 中直接写 `CONFIG_PACKAGE_xxx=y`（config 优先级更高，会与 plugins.conf 合并）。
+- 每行一个包，格式固定为 `包名=y` 或 `包名=n`；
+- 支持 `#` 注释（整行注释，或行尾注释均可）；
+- 支持 UTF-8 BOM（脚本会自动兼容）；
+- 两个机型共用同一份 `plugins.conf`，改动对两台机器同时生效。
 
-### 安装清单之外的插件（第三方 feed）
-
-清单之外的插件（如 `luci-app-openclash` 的某些变体、iStore 商店类插件、个人维护的 luci 应用等）不在上游源码 feed 中，直接写 `plugins.conf` 会因 `make defconfig` 找不到包而被清除。需要两步：
-
-1. **添加第三方 feed 源**：编辑 `diy-part1.sh`，追加一行，例如：
-
-   ```bash
-   echo 'src-git 自定义名 https://github.com/作者/仓库.git;分支名' >>feeds.conf.default
-   ```
-
-   当前已内置的第三方 feed：`passwall_packages`（passwall 依赖）、`istore`（luci-app-store）、`mosdns`（luci-app-mosdns，openwrt-21.02 分支）、`taskplan`（luci-app-taskplan）。
-
-2. **在 `plugins.conf` 中把该插件行改为 `y`**（或新增一行 `插件名=y`）。
-
-之后 workflow 的 `feeds update -a / install -a` 会自动拉取 feed，插件即可参与编译。
-
-> 注意：第三方 feed 与源码版本可能存在兼容性问题（依赖缺失、luci 版本差异），编译失败时请查看 Actions 日志中的具体报错。
-
-### 已启用插件（默认 6 个）
+### 默认已启用插件（6 个）
 
 | 插件 | 说明 |
 | --- | --- |
@@ -96,7 +88,22 @@ luci-app-sqm=n          # 禁用 SQM
 | `luci-app-mosdns` | mosdns DNS 分流/加速（第三方 feed，含 mosdns 本体） |
 | `luci-app-taskplan` | 任务设置/定时计划（第三方 feed，重启/关机/定时任务/自定义脚本） |
 
-### 可选未启用插件（189 个）
+### 如何启用 / 禁用插件
+
+**启用**：把对应行 `包名=n` 改为 `包名=y`，提交并推送，等待自动编译（或手动触发）。
+
+**禁用**：把 `包名=y` 改为 `包名=n` 即可。默认未启用的插件在 `plugins.conf` 中均为 `=n`。
+
+**新增清单外的插件**：见下节"第三方 feed 与插件安装"。
+
+### 提示
+
+- 若只想**某个机型**启用某插件，可把该插件直接写进对应 `.config`（`CONFIG_PACKAGE_xxx=y`），`.config` 优先级更高，会与 `plugins.conf` 合并生效。
+- 个别插件（如 passwall）带 `INCLUDE_*` 子选项，如需调整请在对应 `.config` 中修改。
+
+### 完整插件清单
+
+清单按分类列出，除 6 个默认启用项外，其余 189 个默认为 `n`，需要哪个就把对应行改为 `y`。
 
 #### 科学上网 / 代理 / VPN
 
@@ -312,9 +319,140 @@ luci-app-sqm=n          # 禁用 SQM
 | `luci-app-firewall` | 防火墙配置（系统默认） |
 | `luci-app-opkg` | 软件包管理（系统默认） |
 
+## 第三方 feed 与插件安装
+
+### 概念
+
+`plugins.conf` 里的包必须**存在于某个 feed 中**才能编译。上游 `immortalwrt-mt798x` 自带大量插件（即上面清单），但 iStore 商店类、个人维护的 luci 应用等不在其中。这类插件需要先通过 **feed 源** 引入，再在 `plugins.conf` 中启用。
+
+### 添加新的第三方 feed（两步）
+
+**第 1 步：编辑 `diy-part1.sh`**，追加一行 feed 源声明：
+
+```bash
+# 格式：src-git 自定义名 https://github.com/作者/仓库.git;分支名
+echo 'src-git myapp https://github.com/xxx/luci-app-xxx.git;main' >>feeds.conf.default
+```
+
+**第 2 步：在 `plugins.conf` 中把该插件行改为 `y`**（或新增一行 `插件名=y`）。
+
+之后 workflow 的 `feeds update -a / install -a` 会自动拉取 feed，插件即可参与编译。
+
+### 当前内置的第三方 feed（4 个）
+
+| Feed | 来源 | 提供插件 |
+| --- | --- | --- |
+| `passwall_packages` | passwall 依赖包集合 | `luci-app-passwall` 的后端/依赖（17 个） |
+| `istore` | iStore 应用商店（main 分支） | `luci-app-store` 及 3 个依赖 |
+| `mosdns` | mosdns（openwrt-21.02 分支） | `luci-app-mosdns` 及 2 个依赖 |
+| `taskplan` | 任务计划（main 分支） | `luci-app-taskplan` |
+
+### 第三方 feed 插件清单
+
+界面插件（`luci-app-*`）可在 `plugins.conf` 中直接开关；**依赖组件由依赖关系自动启用，无需在 `plugins.conf` 中手动开启**（`plugins.conf` 中已列出的对应行保持 `n` 即可）。
+
+#### passwall_packages（passwall 依赖组件，17 个）
+
+| 包 | 说明 |
+| --- | --- |
+| `xray-core` | Xray 代理内核 |
+| `xray-plugin` | Xray 传输插件（WebSocket/gRPC 等） |
+| `sing-box` | sing-box 通用代理内核 |
+| `naiveproxy` | NaiveProxy 内核 |
+| `hysteria` | Hysteria 协议内核 |
+| `shadowsocks-rust` | Shadowsocks Rust 实现 |
+| `shadowsocksr-libev` | ShadowsocksR libev 实现 |
+| `simple-obfs` | obfs 混淆插件 |
+| `v2ray-plugin` | v2ray 传输插件 |
+| `shadow-tls` | Shadow-TLS 流量伪装 |
+| `chinadns-ng` | ChinaDNS-NG 分流 DNS |
+| `dns2socks` | DNS 转 SOCKS5 |
+| `ipt2socks` | iptables 流量转 SOCKS5 |
+| `microsocks` | 轻量 SOCKS5 服务端 |
+| `tcping` | TCP ping 连通性测试工具 |
+| `geoview` | GeoIP/GeoSite 数据查看工具 |
+| `v2ray-geodata` | v2ray GeoIP/GeoSite 数据包 |
+
+#### istore（iStore 商店组件，4 个）
+
+| 包 | 说明 |
+| --- | --- |
+| `luci-app-store` | iStore 应用商店（默认启用，可在商店内在线安装插件） |
+| `taskd` | 商店后台任务守护进程（自动依赖） |
+| `luci-lib-taskd` | taskd 的 LuCI 库（自动依赖） |
+| `luci-lib-xterm` | 网页终端 xterm 库（自动依赖） |
+
+#### mosdns（openwrt-21.02 分支，3 个）
+
+| 包 | 说明 |
+| --- | --- |
+| `luci-app-mosdns` | mosdns 网页界面（默认启用） |
+| `mosdns` | mosdns DNS 分流/加速器本体（自动依赖） |
+| `v2dat` | geo 数据解析工具（自动依赖） |
+
+#### taskplan（1 个）
+
+| 包 | 说明 |
+| --- | --- |
+| `luci-app-taskplan` | 任务设置/定时计划（默认启用，重启/关机/定时任务/自定义脚本） |
+
+## 自定义编译配置
+
+| 想改什么 | 改哪里 | 说明 |
+| --- | --- | --- |
+| 默认登录 IP | 工作流 `env.LAN_IP`（或 `diy-part2.sh`） | 两机型各自独立 |
+| 上传完整 bin 目录（全部 ipk） | 工作流 `UPLOAD_BIN_DIR` 改为 `true` | 会显著增大 Artifact |
+| 上游检测频率 | `update-checker.yml` 中 `cron` 表达式 | 默认每 6 小时一次 |
+| Release 保留版本数 | 工作流中相关删除逻辑 | 默认保留最近 3 个版本 |
+| 编译目标机型 | `Mi.config` / `ABT.config` 中的 `CONFIG_TARGET_*` | 一般不用改 |
+
+## 自动编译流程说明
+
+```
+Update Checker（每 6 小时检查上游源码）
+        │  发现新提交
+        ▼
+repository_dispatch 触发 build-Mi.yml / build-ABT.yml
+        │
+        ▼
+检出源码 → 初始化编译环境 → 克隆源码 → 加载自定义配置
+（diy-part1.sh 追加 feed → feeds update/install → diy-part2.sh 注入 IP
+  → apply-plugins.sh 应用 plugins.conf → make defconfig 补齐依赖）
+        │
+        ▼
+编译固件 → 上传 Artifacts → 发布 Releases（保留最近 3 个版本）
+```
+
+也可以手动触发：仓库 `Actions` 页面 → 选择对应工作流 → `Run workflow`（不勾选"enable workflow"可直接用默认参数运行）。
+
+## 固件下载与刷机
+
+- **下载位置**：
+  - Actions 运行记录页 → 底部 `Artifacts`（固件压缩包）；
+  - `Releases` 页面（tag 格式 `YYYY.MM.DD-HHMM`，保留最近 3 个版本）。
+- **固件包内容**：解压后为 `*.bin` 固件文件，小米 AX3000T 请认准 `xiaomi_ax3000t` 前缀，ABT ASR3000 请认准 `abt_asr3000` 前缀。
+- **刷机方式**：进入当前固件后台 → `系统 → 备份/升级 → 刷写新的固件`，选择对应 `*.bin` 文件即可（注意保留配置与否，跨版本建议不保留配置）。
+
+## 常见问题（FAQ）
+
+**Q1：编译失败，日志提示 `unknown package 'xxx'`？**
+说明该插件不在任何 feed 中。先确认 `diy-part1.sh` 里是否添加了对应 feed 源，再确认 `plugins.conf` 中包名拼写正确（包名必须与 feed 中 Makefile 的 `PKG_NAME` 一致）。
+
+**Q2：改了 `plugins.conf` 但固件里没有新插件？**
+确认已提交并推送，且编译是在推送之后触发的。自动触发有 6 小时检测周期，急用可手动 `Run workflow`。
+
+**Q3：iStore 商店打不开或提示缺少依赖？**
+`luci-app-store` 依赖 `taskd`、`luci-lib-taskd`、`luci-lib-xterm`，三者是自动依赖，若被手动改成了 `=n` 或从 config 中删掉会出问题。保持 `plugins.conf` 中这些行不变（或删除对应行）即可。
+
+**Q4：passwall 用不了某个协议？**
+passwall 的协议内核（xray-core、sing-box、shadowsocks-rust 等）在 `passwall_packages` feed 中，已默认自动启用。若要启用特定 INCLUDE 子选项（如 `CONFIG_PACKAGE_luci-app-passwall_INCLUDE_*`），需编辑 `.config`。
+
+**Q5：`diy-part1.sh` 中的 helloworld feed 报错？**
+`fw876/helloworld`（ssr-plus）feed 已被 GitHub 归档、不再更新，如遇编译失败可移除该行或替换为仍在维护的 feed。
+
 ## 注意事项
 
 - 以上插件均已在 feed 内，可直接在 `plugins.conf` 选择；个别插件（如 passwall）带有 `INCLUDE_*` 子选项，如需调整请在对应 `.config` 中修改。
-- `diy-part1.sh` 中引用的 `fw876/helloworld`（ssr-plus）feed 已被 GitHub 归档、不再更新；如遇编译失败可移除该行或替换为仍在维护的 feed。
+- `plugins.conf` 同时作用于两个机型。若只想某个机型启用某插件，请把该插件直接写进对应 `.config`（优先级更高）。
+- 第三方 feed 与源码版本可能存在兼容性问题（依赖缺失、luci 版本差异），编译失败时请查看 Actions 日志中的具体报错。
 - 固件下载位置：Actions 运行记录页的 Artifacts，或 Releases 页面（tag 格式 `YYYY.MM.DD-HHMM`）。
-*（内容由AI生成，仅供参考）*
