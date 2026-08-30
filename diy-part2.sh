@@ -22,16 +22,19 @@ sed -i "s/192.168.1.1/${LAN_IP:-192.168.1.1}/g" package/base-files/files/bin/con
 #   immortalwrt-mt798x 21.02 构建链自带的 Go 工具链为 1.20，
 #   只认两段格式（如 go 1.23），解析 go 1.25.0 直接报 invalid go version。
 # 方案：
-#   将 feeds/packages 的 golang 工具链整体替换为 openwrt/packages master
-#   （Go 1.25+），支持三段格式，可正常解析 mosdns 5.3.4。
-#   若 master 版 golang-package.mk 与 21.02 构建系统不兼容，
-#   把下面的 -b master 改为 -b openwrt-23.05（Go 1.22，GOTOOLCHAIN 自动下载）。
+#   将 feeds/packages 的 golang 工具链整体替换为 openwrt/packages 固定
+#   commit（1c2ce76，Go 1.25+），支持三段格式，可正常解析 mosdns 5.3.4。
+#   固定 commit 保证结果可复现；仅当 fetch 该 commit 失败时兜底回退
+#   到 master 滚动分支（此时结果不再可复现，需及时刷新下方 hash）。
 # ============================================================
-rm -rf feeds/packages/lang/golang
-if git clone --depth 1 -b master https://github.com/openwrt/packages.git /tmp/openwrt-packages 2>/dev/null; then
-    :
+rm -rf feeds/packages/lang/golang /tmp/openwrt-packages
+git init -q /tmp/openwrt-packages
+git -C /tmp/openwrt-packages remote add origin https://github.com/openwrt/packages.git
+if git -C /tmp/openwrt-packages fetch --depth 1 origin 1c2ce769a8a87cc41caf23397628b1eaa8875c82 2>/dev/null; then
+    git -C /tmp/openwrt-packages reset --hard -q FETCH_HEAD
 else
-    git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/packages.git /tmp/openwrt-packages
+    git -C /tmp/openwrt-packages fetch --depth 1 origin master
+    git -C /tmp/openwrt-packages reset --hard -q FETCH_HEAD
 fi
 cp -r /tmp/openwrt-packages/lang/golang feeds/packages/lang/golang
 

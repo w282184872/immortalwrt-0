@@ -364,18 +364,20 @@ luci-app-sqm=n          # 禁用 SQM
 echo 'src-git myapp https://github.com/xxx/luci-app-xxx.git;main' >>feeds.conf.default
 ```
 
+> 建议使用**固定 commit** 写法锁定 feed 版本，保证编译结果可复现，避免滚动分支更新引入不兼容：`src-git myapp https://github.com/xxx/luci-app-xxx.git^<40位commit>`
+
 **第 2 步：在 `plugins.conf` 中把该插件行改为 `y`**（或新增一行 `插件名=y`）。
 
 之后 workflow 的 `feeds update -a / install -a` 会自动拉取 feed，插件即可参与编译。
 
 ### 当前内置的第三方 feed（4 个）
 
-| Feed | 来源 | 提供插件 |
-| --- | --- | --- |
-| `passwall_packages` | passwall 依赖包集合 | `luci-app-passwall` 的后端/依赖（17 个） |
-| `istore` | iStore 应用商店（main 分支） | `luci-app-store` 及 3 个依赖 |
-| `mosdns` | mosdns（openwrt-21.02 分支） | `luci-app-mosdns` 及 2 个依赖 |
-| `taskplan` | 任务计划（main 分支） | `luci-app-taskplan` |
+| Feed | 来源 | 锁定 commit | 提供插件 |
+| --- | --- | --- | --- |
+| `passwall_packages` | passwall 依赖包集合（main 分支） | `ca9248d` | `luci-app-passwall` 的后端/依赖（17 个） |
+| `istore` | iStore 应用商店（main 分支） | `3fca15b` | `luci-app-store` 及 3 个依赖 |
+| `mosdns` | mosdns（openwrt-21.02 分支） | `3154c76` | `luci-app-mosdns` 及 2 个依赖 |
+| `taskplan` | 任务计划（main 分支） | `babd67a` | `luci-app-taskplan` |
 
 ### 第三方 feed 插件清单
 
