@@ -34,7 +34,38 @@ else
     git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/packages.git /tmp/openwrt-packages
 fi
 cp -r /tmp/openwrt-packages/lang/golang feeds/packages/lang/golang
+
+# 升级 xray-core 到 openwrt/packages master 版（26.3.27）
+# 21.02 feed 自带 xray-core 1.8.x 依赖旧版 quic-go（仅支持 Go <=1.21），
+# 工具链升到 Go 1.25 后同样无法编译，必须同步升级。
+if [ -d feeds/packages/net/xray-core ]; then
+    rm -rf feeds/packages/net/xray-core
+    cp -r /tmp/openwrt-packages/net/xray-core feeds/packages/net/xray-core
+fi
+
 rm -rf /tmp/openwrt-packages
+
+# ============================================================
+# 修复 v2ray-core 编译失败：quic-go v0.33.0 不支持 Go 1.21+
+# ------------------------------------------------------------
+# 原因：
+#   passwall(4.68-1) 的 INCLUDE_V2ray 在 aarch64 平台默认 y
+#   （default y if aarch64），强制依赖 v2ray-core；21.02 feed 的
+#   v2ray-core 5.7.0 依赖 quic-go v0.33.0，明确不支持 Go 1.21+
+#   （报 "can't be built on Go 1.21 yet"）。升级 Go 工具链到 1.25
+#   后该问题被触发。
+# 方案：
+#   关闭 V2ray 系内核（v2ray-core / v2ray-plugin，均依赖旧版
+#   quic-go），保留 Xray 作为 passwall 代理内核（已升级到 master
+#   版 26.3.27，兼容 Go 1.25）。
+# ============================================================
+# 显式写入/覆盖 .config（make defconfig 会尊重已有显式设置）
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set/' .config
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config
+grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set' >> .config
+grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' >> .config
+# 显式保留 Xray 内核（默认即 y，此处确保依赖链生效）
+grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y' >> .config
 
 # Modify default theme
 #sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
