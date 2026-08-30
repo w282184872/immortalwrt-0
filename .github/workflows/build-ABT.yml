@@ -8,6 +8,11 @@ name: ABT ASR3000固件编译
 on:
   repository_dispatch:
   workflow_dispatch:
+    inputs:
+      quick_check:
+        description: '快速校验模式：仅验证 feeds/配置/依赖下载，跳过固件编译（约15-25分钟）'
+        type: boolean
+        default: false
 
 env:
   REPO_URL: https://github.com/hanwckf/immortalwrt-mt798x
@@ -98,8 +103,13 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
+    - name: 快速校验完成
+      if: inputs.quick_check == 'true'
+      run: echo "快速校验通过：feeds、自定义配置、依赖下载均正常，可放心进行完整编译"
+
     - name: 编译固件
       id: compile
+      if: inputs.quick_check != 'true'
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
@@ -122,7 +132,7 @@ jobs:
 
     - name: 整理固件文件
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled() && inputs.quick_check != 'true'
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
@@ -138,7 +148,7 @@ jobs:
 
     - name: 生成发布标签
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled() && inputs.quick_check != 'true'
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
