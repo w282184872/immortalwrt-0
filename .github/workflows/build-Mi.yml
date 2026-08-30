@@ -85,7 +85,7 @@ jobs:
         path: |
           openwrt/dl
           openwrt/.ccache
-        key: ${{ github.workflow }}-${{ hashFiles('**/diy-part1.sh', '**/plugins.conf', '**/Mi.config') }}
+        key: ${{ github.workflow }}-${{ hashFiles('**/diy-part1.sh', '**/diy-part2.sh', '**/plugins.conf', '**/Mi.config') }}
         restore-keys: |
           ${{ github.workflow }}-
 

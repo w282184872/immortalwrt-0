@@ -43,6 +43,16 @@ if [ -d feeds/packages/net/xray-core ]; then
     cp -r /tmp/openwrt-packages/net/xray-core feeds/packages/net/xray-core
 fi
 
+# 删除 passwall_packages feed 中的重复 xray-core
+# （该 feed 与 packages feed 包名重复，feeds install 时后者被跳过并产生
+#   duplicate 警告；删除源码目录消除歧义，确保编译走上方替换后的版本）
+if [ -d feeds/passwall_packages/xray-core ]; then
+    rm -rf feeds/passwall_packages/xray-core
+fi
+if [ -d package/feeds/passwall_packages/xray-core ]; then
+    rm -rf package/feeds/passwall_packages/xray-core
+fi
+
 rm -rf /tmp/openwrt-packages
 
 # ============================================================
@@ -64,7 +74,10 @@ sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray=.*/CONFIG_PACKAGE_luci
 sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config
 grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set' >> .config
 grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' >> .config
-# 显式保留 Xray 内核（默认即 y，此处确保依赖链生效）
+# 显式保留 Xray 内核（默认即 y，此处确保依赖链生效；
+# sed 先强制 =y，再兜底追加，避免已有 is not set 行时 grep 前缀匹配误判为已启用）
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y/' .config
+sed -i 's/^# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray is not set/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y/' .config
 grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y' >> .config
 
 # Modify default theme
