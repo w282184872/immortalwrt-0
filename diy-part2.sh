@@ -23,9 +23,11 @@ sed -i "s/192.168.1.1/${LAN_IP:-192.168.1.1}/g" package/base-files/files/bin/con
 #   只认两段格式（如 go 1.23），解析 go 1.25.0 直接报 invalid go version。
 # 方案：
 #   将 feeds/packages 的 golang 工具链整体替换为 openwrt/packages 固定
-#   commit（1c2ce76，Go 1.25+），支持三段格式，可正常解析 mosdns 5.3.4。
+#   commit（9d1f1f2，Go 1.27），支持三段格式，可正常解析 mosdns 5.3.4。
 #   固定 commit 保证结果可复现；仅当 fetch 该 commit 失败时兜底回退
 #   到 master 滚动分支（此时结果不再可复现，需及时刷新下方 hash）。
+#   注意：勿用 1c2ce769（过渡态，golang-values.mk 已切 1.27 但缺
+#   golang1.27 子包，会回落 Go 1.24 导致 xray-core 26.3.27 编译失败）。
 # ============================================================
 rm -rf feeds/packages/lang/golang /tmp/openwrt-packages
 git init -q /tmp/openwrt-packages
@@ -33,7 +35,7 @@ git -C /tmp/openwrt-packages remote add origin https://github.com/openwrt/packag
 # fetch 固定 commit，最多重试 3 次（Actions 网络偶发失败会导致回退，必须避免）
 ok=0
 for i in 1 2 3; do
-    if git -C /tmp/openwrt-packages fetch --depth 1 origin 1c2ce769a8a87cc41caf23397628b1eaa8875c82 2>/dev/null; then
+    if git -C /tmp/openwrt-packages fetch --depth 1 origin 9d1f1f2bf4360f2ca5b0db2a3df9ec0086b560a9 2>/dev/null; then
         git -C /tmp/openwrt-packages reset --hard -q FETCH_HEAD
         ok=1
         break
