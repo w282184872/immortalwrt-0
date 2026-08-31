@@ -1,4 +1,4 @@
-#
+﻿#
 # https://github.com/P3TERX/Actions-OpenWrt
 # Description: 编译小米 AX3000T (MT798x) ImmortalWrt 固件
 #
@@ -104,12 +104,12 @@ jobs:
         find dl -size -1024c -exec rm -f {} \;
 
     - name: 快速校验完成
-      if: inputs.quick_check == 'true'
+      if: inputs.quick_check == true
       run: echo "快速校验通过：feeds、自定义配置、依赖下载均正常，可放心进行完整编译"
 
     - name: 编译固件
       id: compile
-      if: inputs.quick_check != 'true'
+      if: inputs.quick_check != true
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
@@ -132,7 +132,7 @@ jobs:
 
     - name: 整理固件文件
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled() && inputs.quick_check != 'true'
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled() && inputs.quick_check != true
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
@@ -148,7 +148,7 @@ jobs:
 
     - name: 生成发布标签
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled() && inputs.quick_check != 'true'
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled() && inputs.quick_check != true
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
