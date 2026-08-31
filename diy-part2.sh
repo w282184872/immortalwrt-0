@@ -30,9 +30,17 @@ sed -i "s/192.168.1.1/${LAN_IP:-192.168.1.1}/g" package/base-files/files/bin/con
 rm -rf feeds/packages/lang/golang /tmp/openwrt-packages
 git init -q /tmp/openwrt-packages
 git -C /tmp/openwrt-packages remote add origin https://github.com/openwrt/packages.git
-if git -C /tmp/openwrt-packages fetch --depth 1 origin 1c2ce769a8a87cc41caf23397628b1eaa8875c82 2>/dev/null; then
-    git -C /tmp/openwrt-packages reset --hard -q FETCH_HEAD
-else
+# fetch 固定 commit，最多重试 3 次（Actions 网络偶发失败会导致回退，必须避免）
+ok=0
+for i in 1 2 3; do
+    if git -C /tmp/openwrt-packages fetch --depth 1 origin 1c2ce769a8a87cc41caf23397628b1eaa8875c82 2>/dev/null; then
+        git -C /tmp/openwrt-packages reset --hard -q FETCH_HEAD
+        ok=1
+        break
+    fi
+    sleep 3
+done
+if [ "$ok" = "0" ]; then
     git -C /tmp/openwrt-packages fetch --depth 1 origin master
     git -C /tmp/openwrt-packages reset --hard -q FETCH_HEAD
 fi
@@ -73,15 +81,21 @@ rm -rf /tmp/openwrt-packages
 #   版 26.3.27，兼容 Go 1.25）。
 # ============================================================
 # 显式写入/覆盖 .config（make defconfig 会尊重已有显式设置）
-sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set/' .config
-sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config
-grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set' >> .config
-grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' >> .config
+# 注意：kconfig 禁用行的合法格式必须带 "# " 前缀（"# CONFIG_X is not set"）。
+# 不带 # 的 "CONFIG_X is not set" 是非法行，make defconfig 会忽略并回退到
+# 默认值（passwall INCLUDE_V2ray 在 aarch64 默认 y），导致 v2ray-core 仍被编译。
+# 先纠正历史遗留的非法行（无 # 前缀），再写合法格式，最后兜底追加。
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set$/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set/' .config
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set$/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray=.*/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set/' .config
+sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=.*/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config
+grep -q '^# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set' .config || echo '# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray is not set' >> .config
+grep -q '^# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' .config || echo '# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' >> .config
 # 显式保留 Xray 内核（默认即 y，此处确保依赖链生效；
 # sed 先强制 =y，再兜底追加，避免已有 is not set 行时 grep 前缀匹配误判为已启用）
 sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=.*/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y/' .config
 sed -i 's/^# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray is not set/CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y/' .config
-grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y' >> .config
+grep -q '^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y' .config || echo 'CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y' >> .config
 
 # Modify default theme
 #sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
